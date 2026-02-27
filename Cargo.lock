@@ -43,6 +43,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
+name = "async-generic"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddf3728566eefa873833159754f5732fb0951d3649e6e5b891cc70d56dd41673"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "async-lock"
 version = "3.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -699,10 +710,13 @@ version = "0.12.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4ac832c50ced444ef6be0767a008b02c106a909ba79d1d830501e94b96f6b7e"
 dependencies = [
+ "async-lock",
  "crossbeam-channel",
  "crossbeam-epoch",
  "crossbeam-utils",
  "equivalent",
+ "event-listener",
+ "futures-util",
  "parking_lot",
  "portable-atomic",
  "smallvec",
@@ -1605,7 +1619,9 @@ version = "0.23.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab47906adb6e88ebde460d5b358207d3ff04903e6457ee38939b3bf55575d812"
 dependencies = [
+ "async-generic",
  "async-lock",
+ "async-trait",
  "base64",
  "blosc-src",
  "bytemuck",
@@ -1614,6 +1630,7 @@ dependencies = [
  "crc32c",
  "derive_more",
  "flate2",
+ "futures",
  "getrandom 0.3.4",
  "half",
  "inventory",
@@ -1769,6 +1786,7 @@ dependencies = [
 name = "zarrs_n5"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "bytes",
  "inventory",
  "npyz",
@@ -1797,9 +1815,11 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6151db6a755786bdafe905cb51b5f9d87c2818b75d3977025ed9e9d1571ed144"
 dependencies = [
+ "async-trait",
  "auto_impl",
  "bytes",
  "derive_more",
+ "futures",
  "itertools",
  "thiserror",
  "unsafe_cell_slice",

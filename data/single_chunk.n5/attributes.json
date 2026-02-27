@@ -1,0 +1,16 @@
+{
+    "blockSize": [
+        128,
+        256
+    ],
+    "compression": {
+        "type": "raw"
+    },
+    "dataType": "float32",
+    "description": "Single-chunk array",
+    "dimensions": [
+        128,
+        256
+    ],
+    "n5": "2.0.0"
+}

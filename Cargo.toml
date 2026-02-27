@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+async-trait = { version = "0.1.89", optional = true }
 bytes = "1.11.1"
 inventory = "0.3.22"
 serde = { version = "1.0.228", features = ["derive"] }
@@ -17,6 +18,9 @@ zarrs = { version = "0.23.3", default-features = false, features = [
     "zstd",
 ] }
 zarrs_codec = "0.2.0"
+
+[features]
+async = ["zarrs/async", "dep:async-trait"]
 
 [dev-dependencies]
 npyz = "0.8.4"

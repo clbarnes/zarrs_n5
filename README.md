@@ -5,6 +5,7 @@
 ## Limitations
 
 - Read-only
+- Sync-only
 - No partial chunk reading
 - "default" chunk mode (i.e. not varlen or object)
 - Only supports gzip and bzip2 compression

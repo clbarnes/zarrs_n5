@@ -8,8 +8,12 @@ use zarrs::{
     },
 };
 
+#[cfg(feature = "async")]
+mod asynch;
+
 use crate::metadata::N5Metadata;
 
+#[derive(Debug, Clone)]
 pub struct N5Store<R> {
     inner: R,
 }
@@ -112,9 +116,6 @@ impl<R: ReadableStorageTraits> ReadableStorageTraits for N5Store<R> {
         ))
     }
 }
-
-// TODO: AsyncReadableStorageTraits?
-// TODO: AsyncListableStorageTraits?
 
 impl<R: ListableStorageTraits> ListableStorageTraits for N5Store<R> {
     fn list(&self) -> Result<StoreKeys, StorageError> {

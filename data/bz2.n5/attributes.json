@@ -1,0 +1,17 @@
+{
+    "blockSize": [
+        128,
+        256
+    ],
+    "compression": {
+        "blockSize": 6,
+        "type": "bzip2"
+    },
+    "dataType": "float32",
+    "description": "BZ2-compressed array",
+    "dimensions": [
+        128,
+        256
+    ],
+    "n5": "2.0.0"
+}
