@@ -2,6 +2,7 @@
 name = "zarrs_n5"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
 
 [dependencies]
 async-trait = { version = "0.1.89", optional = true }
