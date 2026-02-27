@@ -5,15 +5,15 @@
 ## Limitations
 
 - Read-only
-- Sync-only
 - No partial chunk reading
 - "default" chunk mode (i.e. not varlen or object)
-- Only supports gzip and bzip2 compression
+- Currently only supports gzip and bzip2 compression
+- Currently only tests against chunks which perfectly fit the array
+  - _should_ work otherwise but I need to find some test data, because zarr v2's N5 implementation pads the end chunks like zarr does
 
 ## Prior art
 
 - [constantinpape/z5](https://github.com/constantinpape/z5): C++/Python reader over a common subset of Zarr and N5
 - [aschampion/rust-n5](https://github.com/aschampion/rust-n5): rust implementation of N5
+- [zarr-developers/zarr-python](https://github.com/zarr-developers/zarr-python/blob/v2.18.7/zarr/n5.py): Zarr v2's N5 support
 - [zarr-developers/n5py](https://github.com/zarr-developers/n5py): python plugins for reading N5 through Zarr v3
-
-Zarr v2 also had some native N5 support.

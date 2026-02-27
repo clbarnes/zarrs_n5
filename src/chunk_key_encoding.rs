@@ -5,7 +5,7 @@ use zarrs::{
         ChunkKeyEncoding, ChunkKeyEncodingTraits,
         chunk_key_encoding::{self as cke, api::ChunkKeyEncodingPlugin},
     },
-    plugin::PluginConfigurationInvalidError,
+    plugin::{ExtensionAliasesV3, PluginConfigurationInvalidError},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -23,13 +23,12 @@ impl ChunkKeyEncodingTraits for N5ChunkKeyEncoding {
     where
         Self: Sized,
     {
-        let cke = match metadata.name() {
-            "zarrs.n5" | "n5" => ChunkKeyEncoding::new(Self),
-            _ => {
-                return Err(zarrs::plugin::PluginCreateError::NameInvalid {
-                    name: metadata.name().into(),
-                });
-            }
+        let cke = if N5ChunkKeyEncoding::matches_name_v3(metadata.name()) {
+            ChunkKeyEncoding::new(Self)
+        } else {
+            return Err(zarrs::plugin::PluginCreateError::NameInvalid {
+                name: metadata.name().into(),
+            });
         };
         if !metadata.configuration_is_none_or_empty() {
             return Err(zarrs::plugin::PluginCreateError::ConfigurationInvalid(
