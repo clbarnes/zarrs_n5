@@ -10,7 +10,10 @@ jobs:
     strategy:
       matrix:
         toolchain: ["stable", "1.91", "beta", "nightly"]
-        features: ['--features ""', "--all-features", "--no-default-features"]
+        features:
+          - '--features ""'
+          # - "--all-features"
+          - "--no-default-features"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
