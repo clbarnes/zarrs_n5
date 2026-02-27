@@ -59,12 +59,14 @@ impl<R> N5Store<R> {
                 format!("could not parse N5 metadata: {e}",),
             )
         })?;
+        log::trace!("parsed N5 metadata: {:?}", n5);
         let zarr: NodeMetadataV3 = n5.try_into().map_err(|e| {
             StorageError::InvalidMetadata(
                 StoreKey::new("attributes.json").unwrap(),
                 format!("could not convert N5 metadata to Zarr metadata: {e}"),
             )
         })?;
+        log::trace!("generated Zarr metadata: {}", zarr);
         match serde_json::to_vec(&zarr) {
             Ok(v) => Ok(Some(Bytes::from_owner(v))),
             Err(e) => Err(StorageError::InvalidMetadata(

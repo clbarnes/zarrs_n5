@@ -4,8 +4,6 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use zarrs::array::CodecChain;
 use zarrs::array::codec::BytesCodec;
-use zarrs::array::codec::bytes_to_bytes::gzip::GzipCodec;
-use zarrs::array::codec::{Bz2CompressionLevel, bytes_to_bytes::bz2::Bz2Codec};
 use zarrs::metadata::v3::MetadataV3;
 use zarrs::plugin::PluginCreateError;
 use zarrs_codec::{
@@ -14,7 +12,6 @@ use zarrs_codec::{
 };
 
 use crate::chunk::{N5ChunkHeader, N5ChunkMode};
-use crate::metadata::N5Compression;
 
 // TODO
 // ?lz4
@@ -27,74 +24,56 @@ inventory::submit! {
     CodecPluginV3::new::<N5Codec>()
 }
 
+/// Codec for N5 blocks.
+///
+/// Validates and strips the header, then applies big-endian byte order and the configured compression codec, if any.
+/// Should not be used with any other codecs.
 #[derive(Debug, Clone)]
 pub struct N5Codec {
-    /// The original representation of the compression.
-    n5_compression: N5Compression,
     /// Always contains a big-endian bytes codec.
     /// May contain a single bytes-to-bytes codec representing the N5 compression.
+    ///
+    /// These codecs are only applied to the N5 block body, i.e. not the block header.
     codecs: CodecChain,
 }
 
 impl N5Codec {
-    pub fn new(compression: N5Compression) -> crate::Result<Self> {
-        let codecs = n5compression_to_chain(&compression)?;
-        Ok(Self {
-            codecs,
-            n5_compression: compression,
-        })
+    pub fn new(compression: Option<Arc<dyn BytesToBytesCodecTraits>>) -> Self {
+        let codecs = CodecChain::new(
+            vec![],
+            Arc::new(BytesCodec::big()),
+            compression.into_iter().collect(),
+        );
+        Self { codecs }
     }
 
     pub fn new_with_configuration(
         configuration: &N5CodecConfiguration,
     ) -> Result<Self, PluginCreateError> {
-        Self::new(configuration.compression).map_err(|e| PluginCreateError::Other(e.to_string()))
+        let Some(cfg) = &configuration.bytes_to_bytes_codec else {
+            return Ok(Self::new(None));
+        };
+
+        let Codec::BytesToBytes(c) = Codec::from_metadata(cfg)? else {
+            return Err(PluginCreateError::Other(format!(
+                "metadata does not represent bytes-to-bytes codec: {cfg:?}"
+            )));
+        };
+
+        Ok(Self::new(Some(c)))
+    }
+
+    fn bytes_to_bytes_codec(&self) -> Option<&Arc<dyn BytesToBytesCodecTraits>> {
+        self.codecs.bytes_to_bytes_codecs().first()
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Copy)]
+/// Configuration for [N5Codec], which serializes compression configuration, if any.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct N5CodecConfiguration {
-    compression: N5Compression,
-}
-
-fn n5compression_to_b2b(
-    n5c: &N5Compression,
-) -> crate::Result<Option<Arc<dyn BytesToBytesCodecTraits>>> {
-    match n5c {
-        N5Compression::Raw => Ok(None),
-        N5Compression::Bzip2 { block_size } => Ok(Some(Arc::new(Bz2Codec::new(
-            Bz2CompressionLevel::new(*block_size as u32)
-                .map_err(|n| crate::Error::general(format!("invalid bz2 block size {n}")))?,
-        )))),
-        N5Compression::Gzip { level } => {
-            let lvl_int: u32 = match level {
-                -1 => 6,
-                n if *n >= 0 => *n as u32,
-                n => {
-                    return Err(crate::Error::general(format!(
-                        "invalid gzip compression level {n}"
-                    )));
-                }
-            };
-            Ok(Some(Arc::new(
-                GzipCodec::new(lvl_int).map_err(crate::Error::wrap)?,
-            )))
-        }
-        // N5Compression::Lz4 { level } => todo!(),
-        // N5Compression::Xz { preset } => todo!(),
-        c => Err(crate::Error::general(format!(
-            "unsupported N5 compression: {c:?}"
-        ))),
-    }
-}
-
-fn n5compression_to_chain(n5c: &N5Compression) -> crate::Result<CodecChain> {
-    let compressor = n5compression_to_b2b(n5c)?;
-    Ok(CodecChain::new(
-        vec![],
-        Arc::new(BytesCodec::big()),
-        compressor.into_iter().collect(),
-    ))
+    /// Metadata for the bytes-to-bytes codec representing the N5 compression, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    bytes_to_bytes_codec: Option<MetadataV3>,
 }
 
 impl CodecTraitsV3 for N5Codec {
@@ -115,11 +94,21 @@ impl CodecTraits for N5Codec {
 
     fn configuration(
         &self,
-        _version: zarrs::plugin::ZarrVersion,
-        _options: &zarrs_codec::CodecMetadataOptions,
+        version: zarrs::plugin::ZarrVersion,
+        options: &zarrs_codec::CodecMetadataOptions,
     ) -> Option<zarrs::metadata::Configuration> {
-        let config = N5CodecConfiguration {
-            compression: self.n5_compression,
+        let config = if let Some(c) = self.bytes_to_bytes_codec() {
+            let name = c.name(version)?;
+            let meta = if let Some(c_cfg) = c.configuration(version, options) {
+                MetadataV3::new_with_configuration(name, c_cfg)
+            } else {
+                MetadataV3::new(name)
+            };
+            N5CodecConfiguration {
+                bytes_to_bytes_codec: Some(meta),
+            }
+        } else {
+            N5CodecConfiguration::default()
         };
         let val = serde_json::to_value(config).expect("N5 compression should be serializable");
         let serde_json::Value::Object(map) = val else {
@@ -205,7 +194,7 @@ impl ArrayToBytesCodecTraits for N5Codec {
 
         // shape should be identical because the regular bounded chunk grid
         // should take care of edge chunks
-        let shape_u32: Vec<u32> = shape.iter().map(|n| n.get() as u32).rev().collect();
+        let shape_u32: Vec<_> = shape.iter().map(|n| n.get() as u32).rev().collect();
         if header.shape != shape_u32 {
             return Err(zarrs_codec::CodecError::Other(format!(
                 "N5 chunk header has shape {:?}, expected {:?}",

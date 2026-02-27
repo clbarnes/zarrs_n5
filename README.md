@@ -8,6 +8,10 @@
 - No partial chunk reading
 - "default" chunk mode (i.e. not varlen or object)
 - Currently only supports gzip and bzip2 compression
+  - lz4 and xz are described in the core spec
+  - blosc is implemented in java but [not well documented](https://github.com/saalfeldlab/n5-blosc/issues/13)
+  - zstd is implemented in java but [not well documented](https://github.com/JaneliaSciComp/n5-zstandard/issues/6)
+  - jpeg is implemented in java but [not well documented](https://github.com/saalfeldlab/n5-jpeg/issues/1)
 - Currently only tests against chunks which perfectly fit the array
   - _should_ work otherwise but I need to find some test data, because zarr v2's N5 implementation pads the end chunks like zarr does
 

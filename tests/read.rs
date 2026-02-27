@@ -5,6 +5,7 @@ use zarrs::filesystem::FilesystemStore;
 use zarrs::storage::ReadableListableStorage;
 
 fn data_dir() -> PathBuf {
+    env_logger::try_init().ok();
     Path::new(env!("CARGO_MANIFEST_DIR")).join("data")
 }
 

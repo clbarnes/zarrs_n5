@@ -7,6 +7,7 @@ edition = "2024"
 async-trait = { version = "0.1.89", optional = true }
 bytes = "1.11.1"
 inventory = "0.3.22"
+log = "0.4.29"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 thiserror = "2.0.18"
@@ -23,5 +24,6 @@ zarrs_codec = "0.2.0"
 async = ["zarrs/async", "dep:async-trait"]
 
 [dev-dependencies]
+env_logger = "0.11.9"
 npyz = "0.8.4"
 zarrs = { version = "0.23.3", features = ["filesystem"] }
