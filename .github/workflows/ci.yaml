@@ -8,6 +8,7 @@ defaults:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         toolchain: ["stable", "1.91", "beta", "nightly"]
         features:
