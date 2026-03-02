@@ -1,16 +1,1 @@
-{
-    "blockSize": [
-        64,
-        128
-    ],
-    "compression": {
-        "type": "raw"
-    },
-    "dataType": "float32",
-    "description": "Evenly-chunked array",
-    "dimensions": [
-        128,
-        256
-    ],
-    "n5": "2.0.0"
-}
+{"blockSize":[128,64],"compression":{"type":"raw"},"dataType":"float32","dimensions":[256,128]}

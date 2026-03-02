@@ -1,18 +1,1 @@
-{
-    "blockSize": [
-        128,
-        256
-    ],
-    "compression": {
-        "level": 6,
-        "type": "gzip",
-        "useZlib": false
-    },
-    "dataType": "float32",
-    "description": "GZip-compressed array",
-    "dimensions": [
-        128,
-        256
-    ],
-    "n5": "2.0.0"
-}
+{"blockSize":[256,128],"compression":{"level":-1,"type":"gzip","useZlib":false},"dataType":"float32","dimensions":[256,128]}

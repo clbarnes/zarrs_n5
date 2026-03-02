@@ -4,18 +4,14 @@
 # requires-python = ">=3.13"
 # dependencies = [
 #     "numpy",
-#     "zarr>=2.18,<3.0",
+#     "tensorstore",
 # ]
 # ///
 from pathlib import Path
 import shutil
-import warnings
 import numpy as np
+import tensorstore as ts
 
-# https://zarr.readthedocs.io/en/v2.18.5/
-import zarr
-
-warnings.simplefilter("ignore", category=FutureWarning)
 here = Path(__file__).parent.resolve()
 
 
@@ -39,7 +35,7 @@ class N5Writer:
         self,
         name: str,
         chunks: tuple[int, ...] | None = None,
-        compressor=None,
+        compressor: str | None = None,
         desc: str | None = None,
     ):
         if chunks is None:
@@ -52,10 +48,32 @@ class N5Writer:
             else:
                 raise FileExistsError(f"{dpath} already exists")
 
-        store = zarr.N5Store(str(dpath))
-        z = zarr.array(self.im, chunks=chunks, store=store, compressor=compressor)
-        if desc is not None:
-            z.attrs["description"] = desc
+        metadata = {
+            "dimensions": self.im.shape,
+            "dataType": str(self.im.dtype),
+        }
+        if chunks is None:
+            metadata["blockSize"] = self.im.shape
+        else:
+            metadata["blockSize"] = chunks
+
+        if compressor is None:
+            metadata["compression"] = {"type": "raw"}
+        else:
+            metadata["compression"] = {"type": compressor}
+
+        dataset = ts.open(
+            {
+                "driver": "n5",
+                "kvstore": {
+                    "driver": "file",
+                    "path": str(dpath),
+                },
+                "metadata": metadata,
+                "create": True,
+            }
+        ).result()
+        dataset.write(self.im).result()
 
     def write_npy(self):
         dpath = self.root / "raw.npy"
@@ -71,6 +89,7 @@ class N5Writer:
         self.write_npy()
         self.single_chunk()
         self.even_chunk()
+        # self.uneven_chunk()
         self.gzip()
         self.bz2()
 
@@ -88,12 +107,12 @@ class N5Writer:
         self.write(
             "gzip_uneven",
             chunks=tuple(s // 2 + s // 4 for s in self.im.shape),
-            compressor=zarr.GZip(level=6),
+            compressor="gzip",
             desc="GZip-compressed, unevenly-chunked array",
         )
 
     def uneven_chunk(self):
-        # NOTE zarr pads the last chunks, so this isn't a good test
+        # NOTE tensorstore pads the last chunks, so this isn't a good test
         self.write(
             "uneven_chunk",
             chunks=tuple(s // 2 + s // 4 for s in self.im.shape),
@@ -103,14 +122,14 @@ class N5Writer:
     def gzip(self):
         self.write(
             "gzip",
-            compressor=zarr.GZip(level=6),
+            compressor="gzip",
             desc="GZip-compressed array",
         )
 
     def bz2(self):
         self.write(
             "bz2",
-            compressor=zarr.BZ2(level=6),
+            compressor="bzip2",
             desc="BZ2-compressed array",
         )
 

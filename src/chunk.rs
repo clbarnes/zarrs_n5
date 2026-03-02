@@ -17,7 +17,7 @@ pub(crate) enum N5ChunkMode {
 }
 
 impl N5ChunkHeader {
-    pub(crate) fn from_bytes(bytes: &[u8]) -> crate::Result<Self> {
+    pub fn from_bytes(bytes: &[u8]) -> crate::Result<Self> {
         let mut offset: usize = 0;
 
         let mode_num = u16::from_be_bytes(
