@@ -3,8 +3,9 @@ use std::{borrow::Cow, num::NonZeroU64, sync::Arc};
 use serde::{Deserialize, Serialize};
 use zarrs::{
     array::{
-        ArrayMetadataV3, FillValueMetadata,
+        ArrayMetadataV3, ChunkKeyEncodingTraits, FillValueMetadata,
         chunk_grid::{RegularBoundedChunkGrid, RegularBoundedChunkGridConfiguration},
+        chunk_key_encoding::V2ChunkKeyEncoding,
         codec::{Bz2Codec, Bz2CompressionLevel, GzipCodec},
         data_type,
     },
@@ -14,7 +15,7 @@ use zarrs::{
 };
 use zarrs_codec::CodecTraits;
 
-use crate::{chunk_key_encoding::N5ChunkKeyEncoding, codec::N5Codec};
+use crate::codec::N5Codec;
 
 /// Representation of N5 metadata, either an array or a group.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,10 +79,10 @@ pub struct N5ArrayMetadata {
     /// N5 version; present if this is a hierarchy root.
     #[serde(rename = "n5")]
     pub n5_version: Option<String>,
-    /// Array shape. Note that N5 uses F order, so the dimensions are reversed compared to Zarr.
+    /// Array shape.
     pub dimensions: Vec<u64>,
-    /// Chunk shape. Note that N5 uses F order, so the dimensions are reversed compared to Zarr.
-    pub block_size: Vec<u64>,
+    /// Chunk shape.
+    pub block_size: Vec<NonZeroU64>,
     /// Data type as a string.
     pub data_type: String,
     /// Chunk compression configuration.
@@ -119,8 +120,15 @@ pub enum N5Compression {
         #[serde(default = "default_xz_preset")]
         preset: u32,
     },
-    // TODO https://github.com/saalfeldlab/n5-blosc
-    // TODO https://github.com/JaneliaSciComp/n5-zstandard/
+    Zstd {
+        /// Default 3. Must be in the range -5..=22.
+        #[serde(default = "default_zstd_level")]
+        level: i8,
+    }, // TODO https://github.com/saalfeldlab/n5-blosc
+}
+
+fn default_zstd_level() -> i8 {
+    3
 }
 
 fn default_bzip2_block_size() -> u8 {
@@ -166,6 +174,7 @@ impl N5Compression {
             }
             // N5Compression::Lz4 { level } => todo!(),
             // N5Compression::Xz { preset } => todo!(),
+            // N5Compression::Zstd { level } => todo!(),
             c => Err(crate::Error::general(format!(
                 "unsupported N5 compression: {c:?}"
             ))),
@@ -173,13 +182,26 @@ impl N5Compression {
     }
 }
 
-/// Reverses block_size and creates regular chunk grid
-fn convert_chunk_grid(block_size: &[u64]) -> crate::Result<MetadataV3> {
-    let chunk_shape: Vec<_> = block_size
-        .iter()
-        .map(|&n| NonZeroU64::new(n).ok_or_else(|| crate::Error::general("zero block size")))
-        .rev()
-        .collect::<crate::Result<Vec<_>>>()?;
+// /// Reverses block_size and creates regular chunk grid
+// fn convert_chunk_grid_rev(block_size: &[u64]) -> crate::Result<MetadataV3> {
+//     let chunk_shape: Vec<_> = block_size
+//         .iter()
+//         .map(|&n| NonZeroU64::new(n).ok_or_else(|| crate::Error::general("zero block size")))
+//         .rev()
+//         .collect::<crate::Result<Vec<_>>>()?;
+//     let out = MetadataV3::new_with_serializable_configuration(
+//         RegularBoundedChunkGrid::aliases_v3()
+//             .default_name
+//             .clone()
+//             .to_string(),
+//         &RegularBoundedChunkGridConfiguration { chunk_shape },
+//     )?;
+//
+//     Ok(out)
+// }
+
+fn convert_chunk_grid(block_size: &[NonZeroU64]) -> crate::Result<MetadataV3> {
+    let chunk_shape: Vec<_> = block_size.to_vec();
     let out = MetadataV3::new_with_serializable_configuration(
         RegularBoundedChunkGrid::aliases_v3()
             .default_name
@@ -221,12 +243,23 @@ fn convert_fill_value() -> FillValueMetadata {
     FillValueMetadata::Number(serde_json::Number::from(0))
 }
 
+// /// Reverse the chunk indices.
+// fn convert_chunk_key_encoding_rev() -> MetadataV3 {
+//     MetadataV3::new(
+//         N5ChunkKeyEncoding::aliases_v3()
+//             .default_name
+//             .clone()
+//             .to_string(),
+//     )
+// }
+//
+
 fn convert_chunk_key_encoding() -> MetadataV3 {
-    MetadataV3::new(
-        N5ChunkKeyEncoding::aliases_v3()
-            .default_name
-            .clone()
-            .to_string(),
+    let cke = V2ChunkKeyEncoding::new_slash();
+    MetadataV3::new_with_configuration(
+        cke.name_v3()
+            .expect("v2 chunk key encoding should have name"),
+        cke.configuration(),
     )
 }
 
@@ -240,13 +273,14 @@ impl TryFrom<N5ArrayMetadata> for ArrayMetadataV3 {
     type Error = crate::Error;
 
     fn try_from(value: N5ArrayMetadata) -> Result<Self, Self::Error> {
-        let shape: Vec<_> = value.dimensions.iter().rev().copied().collect();
+        // let shape: Vec<_> = value.dimensions.iter().rev().copied().collect();
+        let shape: Vec<_> = value.dimensions;
         let chunk_grid = convert_chunk_grid(&value.block_size)?;
         let data_type = convert_data_type(&value.data_type)?;
         let fill_value = convert_fill_value();
 
         let zarr_version = ZarrVersion::V3;
-        let n5_codec = N5Codec::new(value.compression.to_bytes_to_bytes_codec()?);
+        let n5_codec = N5Codec::new(value.compression.to_bytes_to_bytes_codec()?, shape.len());
         let name = n5_codec
             .name(zarr_version)
             .unwrap_or_else(|| "zarrs.n5".into());

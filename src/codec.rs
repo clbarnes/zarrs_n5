@@ -2,8 +2,8 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use zarrs::array::CodecChain;
-use zarrs::array::codec::BytesCodec;
+use zarrs::array::codec::{BytesCodec, TransposeOrder};
+use zarrs::array::{CodecChain, codec::TransposeCodec};
 use zarrs::metadata::v3::MetadataV3;
 use zarrs::plugin::PluginCreateError;
 use zarrs_codec::{
@@ -38,9 +38,12 @@ pub struct N5Codec {
 }
 
 impl N5Codec {
-    pub fn new(compression: Option<Arc<dyn BytesToBytesCodecTraits>>) -> Self {
+    pub fn new(compression: Option<Arc<dyn BytesToBytesCodecTraits>>, ndim: usize) -> Self {
+        let transpose_order = (0..ndim).rev().collect::<Vec<_>>();
         let codecs = CodecChain::new(
-            vec![],
+            vec![Arc::new(TransposeCodec::new(
+                TransposeOrder::new(&transpose_order).unwrap(),
+            ))],
             Arc::new(BytesCodec::big()),
             compression.into_iter().collect(),
         );
@@ -50,30 +53,16 @@ impl N5Codec {
     pub fn new_with_configuration(
         configuration: &N5CodecConfiguration,
     ) -> Result<Self, PluginCreateError> {
-        let Some(cfg) = &configuration.bytes_to_bytes_codec else {
-            return Ok(Self::new(None));
-        };
-
-        let Codec::BytesToBytes(c) = Codec::from_metadata(cfg)? else {
-            return Err(PluginCreateError::Other(format!(
-                "metadata does not represent bytes-to-bytes codec: {cfg:?}"
-            )));
-        };
-
-        Ok(Self::new(Some(c)))
-    }
-
-    fn bytes_to_bytes_codec(&self) -> Option<&Arc<dyn BytesToBytesCodecTraits>> {
-        self.codecs.bytes_to_bytes_codecs().first()
+        let codecs = CodecChain::from_metadata(&configuration.codecs)?;
+        Ok(Self { codecs })
     }
 }
 
 /// Configuration for [N5Codec], which serializes compression configuration, if any.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct N5CodecConfiguration {
-    /// Metadata for the bytes-to-bytes codec representing the N5 compression, if any.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    bytes_to_bytes_codec: Option<MetadataV3>,
+    /// Codecs to apply to the block body, i.e. after stripping the N5 block header.
+    codecs: Vec<MetadataV3>,
 }
 
 impl CodecTraitsV3 for N5Codec {
@@ -94,22 +83,11 @@ impl CodecTraits for N5Codec {
 
     fn configuration(
         &self,
-        version: zarrs::plugin::ZarrVersion,
+        _version: zarrs::plugin::ZarrVersion,
         options: &zarrs_codec::CodecMetadataOptions,
     ) -> Option<zarrs::metadata::Configuration> {
-        let config = if let Some(c) = self.bytes_to_bytes_codec() {
-            let name = c.name(version)?;
-            let meta = if let Some(c_cfg) = c.configuration(version, options) {
-                MetadataV3::new_with_configuration(name, c_cfg)
-            } else {
-                MetadataV3::new(name)
-            };
-            N5CodecConfiguration {
-                bytes_to_bytes_codec: Some(meta),
-            }
-        } else {
-            N5CodecConfiguration::default()
-        };
+        let metadatas = self.codecs.create_metadatas(options);
+        let config = N5CodecConfiguration { codecs: metadatas };
         let val = serde_json::to_value(config).expect("N5 compression should be serializable");
         let serde_json::Value::Object(map) = val else {
             panic!("N5 compression should serialize to a JSON object");
@@ -134,10 +112,10 @@ impl CodecTraits for N5Codec {
 impl ArrayCodecTraits for N5Codec {
     fn recommended_concurrency(
         &self,
-        _shape: &[std::num::NonZeroU64],
-        _data_type: &zarrs::array::DataType,
+        shape: &[std::num::NonZeroU64],
+        data_type: &zarrs::array::DataType,
     ) -> Result<zarrs_codec::RecommendedConcurrency, zarrs_codec::CodecError> {
-        Ok(zarrs_codec::RecommendedConcurrency::new_maximum(1))
+        self.codecs.recommended_concurrency(shape, data_type)
     }
 }
 
@@ -150,15 +128,10 @@ impl ArrayToBytesCodecTraits for N5Codec {
         &self,
         shape: &[std::num::NonZeroU64],
         data_type: &zarrs::array::DataType,
-        _fill_value: &zarrs::array::FillValue,
+        fill_value: &zarrs::array::FillValue,
     ) -> Result<zarrs_codec::BytesRepresentation, zarrs_codec::CodecError> {
-        let ret = if let Some(fs) = data_type.fixed_size() {
-            let numel: u64 = shape.iter().map(|n| n.get()).product();
-            zarrs_codec::BytesRepresentation::BoundedSize(numel * fs as u64)
-        } else {
-            zarrs_codec::BytesRepresentation::UnboundedSize
-        };
-        Ok(ret)
+        self.codecs
+            .encoded_representation(shape, data_type, fill_value)
     }
 
     fn encode<'a>(
@@ -183,22 +156,22 @@ impl ArrayToBytesCodecTraits for N5Codec {
         options: &zarrs_codec::CodecOptions,
     ) -> Result<zarrs_codec::ArrayBytes<'a>, zarrs_codec::CodecError> {
         let header = N5ChunkHeader::from_bytes(&bytes)
-            .map_err(|e| CodecError::Other(format!("N5 chunk header could not be parsed: {e}")))?;
+            .map_err(|e| CodecError::Other(format!("N5 block header could not be parsed: {e}")))?;
 
         if !matches!(header.mode, N5ChunkMode::Default) {
             return Err(zarrs_codec::CodecError::Other(format!(
-                "unsupported N5 chunk mode: {:?}",
+                "unsupported N5 block mode: {:?}",
                 header.mode
             )));
         }
 
         // shape should be identical because the regular bounded chunk grid
         // should take care of edge chunks
-        let shape_u32: Vec<_> = shape.iter().map(|n| n.get() as u32).rev().collect();
+        let shape_u32: Vec<_> = shape.iter().map(|n| n.get() as u32).collect();
         if header.shape != shape_u32 {
             return Err(zarrs_codec::CodecError::Other(format!(
-                "N5 chunk header has shape {:?}, expected {:?}",
-                header.shape, shape,
+                "N5 block header has shape {:?}, expected {:?}",
+                header.shape, shape_u32,
             )));
         }
 
