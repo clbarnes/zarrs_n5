@@ -6,7 +6,10 @@ use zarrs::{
         ArrayMetadataV3, ChunkKeyEncodingTraits, FillValueMetadata,
         chunk_grid::{RegularBoundedChunkGrid, RegularBoundedChunkGridConfiguration},
         chunk_key_encoding::V2ChunkKeyEncoding,
-        codec::{Bz2Codec, Bz2CompressionLevel, GzipCodec, ZstdCodec},
+        codec::{
+            BloscCodec, BloscCompressionLevel, BloscCompressor, BloscShuffleMode, Bz2Codec,
+            Bz2CompressionLevel, GzipCodec, ZstdCodec,
+        },
         data_type,
     },
     group::GroupMetadataV3,
@@ -94,7 +97,7 @@ pub struct N5ArrayMetadata {
 
 /// N5 chunk compression configuration.
 #[non_exhaustive]
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Copy)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum N5Compression {
     /// Uncompressed.
@@ -120,11 +123,49 @@ pub enum N5Compression {
         #[serde(default = "default_xz_preset")]
         preset: u32,
     },
+    /// <https://github.com/JaneliaSciComp/n5-zstd>
     Zstd {
         /// Default 3. Must be in the range -5..=22.
         #[serde(default = "default_zstd_level")]
         level: i32,
-    }, // TODO https://github.com/saalfeldlab/n5-blosc
+    },
+    /// <https://github.com/saalfeldlab/n5-blosc>
+    Blosc {
+        /// Compressor name
+        #[serde(default = "default_blosc_cname")]
+        cname: BloscCompressor,
+        /// Compressor level
+        #[serde(default = "default_blosc_clevel")]
+        clevel: BloscCompressionLevel,
+        /// - -1: auto
+        /// - 0: no shuffle
+        /// - 1: byte shuffle
+        /// - 2: bit shuffle
+        #[serde(default = "default_blosc_shuffle")]
+        shuffle: i32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        blocksize: Option<usize>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        typesize: Option<usize>,
+        #[serde(default = "default_blosc_nthreads")]
+        nthreads: u32,
+    },
+}
+
+fn default_blosc_cname() -> BloscCompressor {
+    BloscCompressor::BloscLZ
+}
+
+fn default_blosc_clevel() -> BloscCompressionLevel {
+    BloscCompressionLevel::try_from(6).unwrap()
+}
+
+fn default_blosc_shuffle() -> i32 {
+    0
+}
+
+fn default_blosc_nthreads() -> u32 {
+    1
 }
 
 fn default_zstd_level() -> i32 {
@@ -173,6 +214,37 @@ impl N5Compression {
             N5Compression::Zstd { level } => {
                 // TODO: checksum?
                 Arc::new(ZstdCodec::new(*level, false))
+            }
+            N5Compression::Blosc {
+                cname,
+                clevel,
+                shuffle,
+                blocksize,
+                typesize,
+                ..
+            } => {
+                let shuffle_mode = match *shuffle {
+                    -1 => {
+                        if typesize.unwrap_or(1) > 1 {
+                            BloscShuffleMode::Shuffle
+                        } else {
+                            BloscShuffleMode::NoShuffle
+                        }
+                    }
+                    0 => BloscShuffleMode::NoShuffle,
+                    1 => BloscShuffleMode::Shuffle,
+                    2 => BloscShuffleMode::BitShuffle,
+                    n => {
+                        return Err(crate::Error::general(format!(
+                            "invalid Blosc shuffle mode {n}"
+                        )));
+                    }
+                };
+                Arc::new(
+                    BloscCodec::new(*cname, *clevel, *blocksize, shuffle_mode, *typesize).map_err(
+                        |e| crate::Error::general(format!("invalid Blosc configuration: {e}")),
+                    )?,
+                )
             }
             // N5Compression::Lz4 { level } => todo!(),
             // N5Compression::Xz { preset } => todo!(),

@@ -17,6 +17,7 @@
     - [x] zstd <https://github.com/JaneliaSciComp/n5-zstandard>
     - [ ] blosc is implemented in java but [not well documented](https://github.com/saalfeldlab/n5-blosc/issues/13)
     - [ ] jpeg is implemented in java but [not well documented](https://github.com/saalfeldlab/n5-jpeg/issues/1)
+      - PRs welcome but I'm unlikely to prioritise this unless a [Zarr JPEG codec were stabilised](https://github.com/zarr-developers/zarr-extensions/issues/15)
 - Currently only tests against chunks which perfectly fit the array
   - _should_ work otherwise but I need to find some test data, because zarr v2's N5 implementation pads the end chunks like zarr does
 

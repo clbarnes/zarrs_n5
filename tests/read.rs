@@ -74,3 +74,8 @@ fn test_gzip() {
 fn test_zstd() {
     check_read("zstd");
 }
+
+#[test]
+fn test_blosc() {
+    check_read("blosc");
+}

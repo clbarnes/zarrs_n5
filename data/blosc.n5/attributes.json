@@ -1,0 +1,1 @@
+{"blockSize":[256,128],"compression":{"blocksize":0,"clevel":6,"cname":"blosclz","shuffle":0,"type":"blosc"},"dataType":"float32","dimensions":[256,128]}

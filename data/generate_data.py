@@ -61,6 +61,10 @@ class N5Writer:
             metadata["compression"] = {"type": "raw"}
         else:
             metadata["compression"] = {"type": compressor}
+            if compressor == "blosc":
+                metadata["compression"]["cname"] = "blosclz"
+                metadata["compression"]["clevel"] = 6  # type: ignore
+                metadata["compression"]["shuffle"] = 0  # type: ignore
 
         dataset = ts.open(
             {
@@ -92,6 +96,7 @@ class N5Writer:
         self.zstd()
         self.gzip()
         self.bz2()
+        self.blosc()
         # self.uneven_chunk()
 
     def single_chunk(self):
@@ -132,6 +137,13 @@ class N5Writer:
             "gzip",
             compressor="gzip",
             desc="GZip-compressed array",
+        )
+
+    def blosc(self):
+        self.write(
+            "blosc",
+            compressor="blosc",
+            desc="Blosc-compressed array",
         )
 
     def bz2(self):
