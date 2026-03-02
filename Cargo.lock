@@ -1736,9 +1736,9 @@ dependencies = [
 
 [[package]]
 name = "zarrs"
-version = "0.23.3"
+version = "0.23.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab47906adb6e88ebde460d5b358207d3ff04903e6457ee38939b3bf55575d812"
+checksum = "4090cd255d12283b7ac47168170fbd01f96fee922f05e3a1960a13108fe6eb5d"
 dependencies = [
  "async-generic",
  "async-lock",

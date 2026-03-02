@@ -12,7 +12,7 @@ jobs:
         toolchain: ["stable", "1.91", "beta", "nightly"]
         features:
           - '--features ""'
-          # - "--all-features"
+          - "--all-features"
           - "--no-default-features"
     runs-on: ubuntu-latest
     steps:
