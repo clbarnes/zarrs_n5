@@ -33,6 +33,9 @@ fn read_n5(name: &str) -> (Vec<u64>, Vec<f32>) {
     let array_name = format!("/{name}.n5");
     let store = n5_store();
     let array = zarrs::array::Array::open(store.clone(), &array_name).expect("open array");
+    serde_json::to_string_pretty(array.metadata())
+        .map(|s| log::trace!("metadata for {name}.n5:\n{s}"))
+        .expect("metadata should be serializable");
     let shape = array.shape().to_vec();
     let data: Vec<f32> = array
         .retrieve_array_subset(&array.subset_all())
