@@ -89,12 +89,20 @@ class N5Writer:
         self.write_npy()
         self.single_chunk()
         self.even_chunk()
-        # self.uneven_chunk()
+        self.zstd()
         self.gzip()
         self.bz2()
+        # self.uneven_chunk()
 
     def single_chunk(self):
         self.write("single_chunk", desc="Single-chunk array")
+
+    def zstd(self):
+        self.write(
+            "zstd",
+            compressor="zstd",
+            desc="ZStd-compressed array",
+        )
 
     def even_chunk(self):
         self.write(

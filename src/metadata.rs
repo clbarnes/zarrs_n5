@@ -6,7 +6,7 @@ use zarrs::{
         ArrayMetadataV3, ChunkKeyEncodingTraits, FillValueMetadata,
         chunk_grid::{RegularBoundedChunkGrid, RegularBoundedChunkGridConfiguration},
         chunk_key_encoding::V2ChunkKeyEncoding,
-        codec::{Bz2Codec, Bz2CompressionLevel, GzipCodec},
+        codec::{Bz2Codec, Bz2CompressionLevel, GzipCodec, ZstdCodec},
         data_type,
     },
     group::GroupMetadataV3,
@@ -123,11 +123,11 @@ pub enum N5Compression {
     Zstd {
         /// Default 3. Must be in the range -5..=22.
         #[serde(default = "default_zstd_level")]
-        level: i8,
+        level: i32,
     }, // TODO https://github.com/saalfeldlab/n5-blosc
 }
 
-fn default_zstd_level() -> i8 {
+fn default_zstd_level() -> i32 {
     3
 }
 
@@ -152,12 +152,12 @@ impl N5Compression {
     pub fn to_bytes_to_bytes_codec(
         &self,
     ) -> crate::Result<Option<Arc<dyn zarrs_codec::BytesToBytesCodecTraits>>> {
-        match self {
-            N5Compression::Raw => Ok(None),
-            N5Compression::Bzip2 { block_size } => Ok(Some(Arc::new(Bz2Codec::new(
+        let b2b: Arc<dyn zarrs_codec::BytesToBytesCodecTraits> = match self {
+            N5Compression::Raw => return Ok(None),
+            N5Compression::Bzip2 { block_size } => Arc::new(Bz2Codec::new(
                 Bz2CompressionLevel::new(*block_size as u32)
                     .map_err(|n| crate::Error::general(format!("invalid bz2 block size {n}")))?,
-            )))),
+            )),
             N5Compression::Gzip { level } => {
                 let lvl_int: u32 = match level {
                     -1 => 6,
@@ -168,17 +168,21 @@ impl N5Compression {
                         )));
                     }
                 };
-                Ok(Some(Arc::new(
-                    GzipCodec::new(lvl_int).map_err(crate::Error::wrap)?,
-                )))
+                Arc::new(GzipCodec::new(lvl_int).map_err(crate::Error::wrap)?)
+            }
+            N5Compression::Zstd { level } => {
+                // TODO: checksum?
+                Arc::new(ZstdCodec::new(*level, false))
             }
             // N5Compression::Lz4 { level } => todo!(),
             // N5Compression::Xz { preset } => todo!(),
-            // N5Compression::Zstd { level } => todo!(),
-            c => Err(crate::Error::general(format!(
-                "unsupported N5 compression: {c:?}"
-            ))),
-        }
+            c => {
+                return Err(crate::Error::general(format!(
+                    "unsupported N5 compression: {c:?}"
+                )));
+            }
+        };
+        Ok(Some(b2b))
     }
 }
 

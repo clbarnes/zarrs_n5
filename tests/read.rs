@@ -69,3 +69,8 @@ fn test_bz2() {
 fn test_gzip() {
     check_read("gzip");
 }
+
+#[test]
+fn test_zstd() {
+    check_read("zstd");
+}
