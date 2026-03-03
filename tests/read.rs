@@ -79,3 +79,8 @@ fn test_zstd() {
 fn test_blosc() {
     check_read("blosc");
 }
+
+#[test]
+fn test_uneven_padded() {
+    check_read("uneven_chunk_padded");
+}

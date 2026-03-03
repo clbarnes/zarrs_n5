@@ -97,7 +97,7 @@ class N5Writer:
         self.gzip()
         self.bz2()
         self.blosc()
-        # self.uneven_chunk()
+        self.uneven_chunk_padded()
 
     def single_chunk(self):
         self.write("single_chunk", desc="Single-chunk array")
@@ -124,10 +124,9 @@ class N5Writer:
             desc="GZip-compressed, unevenly-chunked array",
         )
 
-    def uneven_chunk(self):
-        # NOTE tensorstore pads the last chunks, so this isn't a good test
+    def uneven_chunk_padded(self):
         self.write(
-            "uneven_chunk",
+            "uneven_chunk_padded",
             chunks=tuple(s // 2 + s // 4 for s in self.im.shape),
             desc="Unevenly-chunked array",
         )
