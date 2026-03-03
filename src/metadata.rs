@@ -49,6 +49,11 @@ impl N5Metadata {
         }
     }
 
+    /// Whether this metadata represents a hierarchy root, i.e. has an N5 version.
+    pub fn is_root(&self) -> bool {
+        self.version().is_some()
+    }
+
     /// Extract the unstructured attributes map.
     pub fn into_attributes(self) -> serde_json::Map<String, serde_json::Value> {
         match self {
@@ -258,24 +263,6 @@ impl N5Compression {
     }
 }
 
-// /// Reverses block_size and creates regular chunk grid
-// fn convert_chunk_grid_rev(block_size: &[u64]) -> crate::Result<MetadataV3> {
-//     let chunk_shape: Vec<_> = block_size
-//         .iter()
-//         .map(|&n| NonZeroU64::new(n).ok_or_else(|| crate::Error::general("zero block size")))
-//         .rev()
-//         .collect::<crate::Result<Vec<_>>>()?;
-//     let out = MetadataV3::new_with_serializable_configuration(
-//         RegularBoundedChunkGrid::aliases_v3()
-//             .default_name
-//             .clone()
-//             .to_string(),
-//         &RegularBoundedChunkGridConfiguration { chunk_shape },
-//     )?;
-//
-//     Ok(out)
-// }
-
 fn convert_chunk_grid(block_size: &[NonZeroU64]) -> crate::Result<MetadataV3> {
     let chunk_shape: Vec<_> = block_size.to_vec();
     let out = MetadataV3::new_with_serializable_configuration(
@@ -318,17 +305,6 @@ fn convert_data_type(data_type: &str) -> crate::Result<MetadataV3> {
 fn convert_fill_value() -> FillValueMetadata {
     FillValueMetadata::Number(serde_json::Number::from(0))
 }
-
-// /// Reverse the chunk indices.
-// fn convert_chunk_key_encoding_rev() -> MetadataV3 {
-//     MetadataV3::new(
-//         N5ChunkKeyEncoding::aliases_v3()
-//             .default_name
-//             .clone()
-//             .to_string(),
-//     )
-// }
-//
 
 fn convert_chunk_key_encoding() -> MetadataV3 {
     let cke = V2ChunkKeyEncoding::new_slash();

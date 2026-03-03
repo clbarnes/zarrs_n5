@@ -26,7 +26,7 @@ fn inner_store() -> FilesystemStore {
 }
 
 fn n5_store() -> ReadableListableStorage {
-    Arc::new(zarrs_n5::storage::N5Store::new(inner_store()))
+    Arc::new(zarrs_n5::N5Store::new(inner_store()))
 }
 
 fn read_n5(name: &str) -> (Vec<u64>, Vec<f32>) {

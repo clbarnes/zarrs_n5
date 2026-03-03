@@ -7,7 +7,7 @@ pub struct N5ChunkHeader {
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u16)]
-pub(crate) enum N5ChunkMode {
+pub enum N5ChunkMode {
     Default = 0,
     #[allow(unused)]
     VarLen {

@@ -8,7 +8,7 @@ use super::N5Store;
 
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
-impl<R: AsyncReadableStorageTraits> AsyncReadableStorageTraits for N5Store<R> {
+impl<S: AsyncReadableStorageTraits> AsyncReadableStorageTraits for N5Store<S> {
     async fn get(&self, key: &StoreKey) -> Result<MaybeBytes, StorageError> {
         if let Some(k) = self.intercept_zarr_json(key) {
             self.convert_metadata(self.inner.get(&k).await?)
@@ -52,7 +52,7 @@ impl<R: AsyncReadableStorageTraits> AsyncReadableStorageTraits for N5Store<R> {
 
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
-impl<R: AsyncListableStorageTraits> AsyncListableStorageTraits for N5Store<R> {
+impl<S: AsyncListableStorageTraits> AsyncListableStorageTraits for N5Store<S> {
     async fn list(&self) -> Result<StoreKeys, StorageError> {
         self.inner.list().await
     }

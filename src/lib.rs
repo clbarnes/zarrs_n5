@@ -5,8 +5,7 @@
 //!
 //! - [storage::N5Store], which wraps other [zarrs] stores
 //!   - implements reading and listing, blocking and async, as supported by the wrapped store
-//! - [chunk_key_encoding::N5ChunkKeyEncoding], which handles the N5 block layout
-//! - [codec::N5Codec], an array-to-bytes codec which handles the N5 block header, bigendian byte order, and compression
+//! - [codec::N5Codec], an array-to-bytes codec which handles the N5 block header, bigendian byte order, block data transposition, and compression
 //!   - varlen and object chunk modes are not supported
 //!   - not all N5 compressors are supported
 //!
@@ -17,13 +16,19 @@
 //!
 //! Alternatively, N5 data can additionally contain a `zarr.json` with specific configuration to allow reading as zarr without the [storage::N5Store].
 
-pub mod chunk;
-pub mod chunk_key_encoding;
-pub mod codec;
+mod chunk;
+pub use chunk::{N5ChunkHeader, N5ChunkMode};
+
+mod codec;
+pub use codec::{N5Codec, N5CodecConfiguration};
+
 mod error;
-pub mod metadata;
-pub mod storage;
+pub use error::{Error, Result};
+
+mod metadata;
+pub use metadata::{N5ArrayMetadata, N5Compression, N5GroupMetadata, N5Metadata};
+
+mod storage;
+pub use storage::N5Store;
 
 pub use zarrs;
-
-pub use error::{Error, Result};

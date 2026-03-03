@@ -19,7 +19,11 @@
     - [ ] jpeg is implemented in java but [not well documented](https://github.com/saalfeldlab/n5-jpeg/issues/1)
       - PRs welcome but I'm unlikely to prioritise this unless a [Zarr JPEG codec were stabilised](https://github.com/zarr-developers/zarr-extensions/issues/15)
 - Currently only tests against chunks which perfectly fit the array
-  - _should_ work otherwise but I need to find some test data, because zarr v2's N5 implementation pads the end chunks like zarr does
+  - _should_ work in cases where the end chunks are truncated appropriately; I need to find some test data
+- Zarr groups must have metadata documents, but N5 groups may not.
+  This may lead to unexpected behaviour when discovering hierarchy structure.
+  This library allows inferring a group with empty attributes when a metadata document is missing.
+- N5 hierarchies have a root (metadata contains the `"n5"` key), but Zarr hierarchies do not; in practice this doesn't matter much
 
 ## Prior art
 
