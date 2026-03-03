@@ -1,8 +1,14 @@
 [package]
 name = "zarrs_n5"
 version = "0.1.0"
+authors = ["Chris Barnes <chrislloydbarnes@gmail.com>"]
+description = "N5 support for zarrs"
+repository = "https://github.com/clbarnes/zarrs_n5"
+license = "MIT"
 edition = "2024"
 rust-version = "1.91"
+keywords = ["zarr", "n5", "storage", "array", "chunked"]
+categories = ["multimedia::images", "multimedia::encoding", "parser-implementations"]
 
 [dependencies]
 async-trait = { version = "0.1.89", optional = true }
