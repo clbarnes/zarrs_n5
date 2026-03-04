@@ -317,7 +317,11 @@ fn convert_chunk_key_encoding() -> MetadataV3 {
 
 impl From<N5GroupMetadata> for GroupMetadataV3 {
     fn from(value: N5GroupMetadata) -> Self {
-        Self::default().with_attributes(value.attributes)
+        let ser_val =
+            serde_json::to_value(value.clone()).expect("N5 group metadata should be serializable");
+        let mut attrs = value.attributes;
+        attrs.insert("_n5".into(), ser_val);
+        Self::default().with_attributes(attrs)
     }
 }
 
@@ -325,7 +329,10 @@ impl TryFrom<N5ArrayMetadata> for ArrayMetadataV3 {
     type Error = crate::Error;
 
     fn try_from(value: N5ArrayMetadata) -> Result<Self, Self::Error> {
-        // let shape: Vec<_> = value.dimensions.iter().rev().copied().collect();
+        let ser_val = serde_json::to_value(value.clone())?;
+        let mut attrs = value.attributes;
+        attrs.insert("_n5".into(), ser_val);
+
         let shape: Vec<_> = value.dimensions;
         let chunk_grid = convert_chunk_grid(&value.block_size)?;
         let data_type = convert_data_type(&value.data_type)?;
@@ -345,7 +352,7 @@ impl TryFrom<N5ArrayMetadata> for ArrayMetadataV3 {
         };
         let out = Self::new(shape, chunk_grid, data_type, fill_value, vec![codec_meta])
             .with_chunk_key_encoding(convert_chunk_key_encoding())
-            .with_attributes(value.attributes);
+            .with_attributes(attrs);
         Ok(out)
     }
 }

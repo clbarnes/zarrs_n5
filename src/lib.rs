@@ -8,13 +8,13 @@
 //! - [codec::N5Codec], an array-to-bytes codec which handles the N5 block header, bigendian byte order, block data transposition, and compression
 //!   - varlen and object chunk modes are not supported
 //!   - not all N5 compressors are supported
+//! - [convert_n5_node] and [convert_n5_hierarchy], which adds Zarr metadata to N5 objects to allow them to be read as Zarr without the [storage::N5Store] wrapper
+//!   - this functionality is experimental and relies on unstable Zarr extensions which may not be supported by other implementations
 //!
 //! When `zarr.json` metadata is requested from the [storage::N5Store],
 //! it is read from the corresponding N5 `attributes.json` and converted to Zarr v3 metadata on the fly.
 //! This converted metadata contains configuration for the N5-specific chunk key encoding and codec plugins,
 //! so regular [zarrs] APIs can be used transparently.
-//!
-//! Alternatively, N5 data can additionally contain a `zarr.json` with specific configuration to allow reading as zarr without the [storage::N5Store].
 
 mod chunk;
 pub use chunk::{N5BlockHeader, N5BlockMode};
@@ -30,5 +30,8 @@ pub use metadata::{N5ArrayMetadata, N5Compression, N5GroupMetadata, N5Metadata};
 
 mod storage;
 pub use storage::N5Store;
+
+mod convert;
+pub use convert::{convert_n5_hierarchy, convert_n5_node};
 
 pub use zarrs;

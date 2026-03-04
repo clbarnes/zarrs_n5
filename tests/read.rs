@@ -2,7 +2,10 @@ use npyz::NpyFile;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use zarrs::filesystem::FilesystemStore;
-use zarrs::storage::ReadableListableStorage;
+use zarrs::metadata::v3::NodeMetadataV3;
+use zarrs::storage::WritableStorageTraits;
+use zarrs::storage::store::MemoryStore;
+use zarrs::storage::{ReadableListableStorage, ReadableStorageTraits, StoreKey};
 
 fn data_dir() -> PathBuf {
     env_logger::try_init().ok();
@@ -18,6 +21,41 @@ fn read_raw() -> (Vec<u64>, Vec<f32>) {
         .into_vec::<f32>()
         .expect("should be able to read data to vec");
     (shape, data)
+}
+
+fn read_fs_to_memory(path: impl AsRef<Path>) -> MemoryStore {
+    let store = MemoryStore::default();
+    let root = path.as_ref();
+    let mut dirs_to_visit = vec![PathBuf::from(".")];
+    while let Some(rel_p) = dirs_to_visit.pop() {
+        let p = root.join(&rel_p);
+        for entry in std::fs::read_dir(&p).expect("dir should be readable") {
+            let entry = entry.expect("should be able to read directory entry");
+            let ftype = entry.file_type().expect("should be able to get file type");
+            if ftype.is_file() {
+                let path = entry.path();
+                let rel_path = path
+                    .strip_prefix(root)
+                    .expect("should be able to strip prefix");
+                let key_str = rel_path.to_str().expect("path should be utf-8");
+                let key = StoreKey::new(key_str).expect("key should be valid");
+                let data = std::fs::read(path).expect("should be able to read file");
+                store
+                    .set(&key, data.into())
+                    .expect("should be able to set store");
+            } else if ftype.is_dir() {
+                dirs_to_visit.push(entry.path());
+            } else {
+                panic!("unexpected file type");
+            }
+        }
+    }
+    store
+}
+
+fn inner_memory_store(name: &str) -> MemoryStore {
+    let path = data_dir().join(format!("{name}.n5"));
+    read_fs_to_memory(path)
 }
 
 fn inner_store() -> FilesystemStore {
@@ -83,4 +121,29 @@ fn test_blosc() {
 #[test]
 fn test_uneven_padded() {
     check_read("uneven_chunk_padded");
+}
+
+#[test]
+fn test_convert_node() {
+    let store = Arc::new(inner_memory_store("single_chunk"));
+    zarrs_n5::convert_n5_node(store.clone(), &"/".try_into().unwrap(), false)
+        .expect("should be able to convert node");
+
+    let n5_attrs_bytes = store
+        .get(&"attributes.json".try_into().unwrap())
+        .expect("should be able to get attributes.json")
+        .expect("attributes.json should exist");
+    let n5_metadata: zarrs_n5::N5Metadata =
+        serde_json::from_slice(&n5_attrs_bytes).expect("should be able to parse attributes.json");
+    let expected_zarr_metadata: NodeMetadataV3 = n5_metadata
+        .try_into()
+        .expect("should be able to convert N5 metadata to Zarr metadata");
+
+    let zarr_metadata_bytes = store
+        .get(&"zarr.json".try_into().unwrap())
+        .expect("should be able to get zarr.json")
+        .expect("zarr.json should exist");
+    let zarr_metadata: NodeMetadataV3 =
+        serde_json::from_slice(&zarr_metadata_bytes).expect("should be able to parse zarr.json");
+    assert_eq!(zarr_metadata, expected_zarr_metadata);
 }

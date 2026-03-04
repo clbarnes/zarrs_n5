@@ -2,6 +2,8 @@
 
 [N5](https://github.com/saalfeldlab/n5) support for the [zarrs](https://github.com/zarrs) ecosystem.
 
+## Usage
+
 ## Limitations
 
 - Read-only
