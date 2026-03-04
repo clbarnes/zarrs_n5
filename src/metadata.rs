@@ -3,12 +3,13 @@ use std::{borrow::Cow, num::NonZeroU64, sync::Arc};
 use serde::{Deserialize, Serialize};
 use zarrs::{
     array::{
-        ArrayMetadataV3, ChunkKeyEncodingTraits, FillValueMetadata,
+        ArrayMetadataV3, BytesToBytesCodecTraits, ChunkKeyEncodingTraits, CodecMetadataOptions,
+        FillValueMetadata,
         chunk_grid::{RegularBoundedChunkGrid, RegularBoundedChunkGridConfiguration},
         chunk_key_encoding::V2ChunkKeyEncoding,
         codec::{
             BloscCodec, BloscCompressionLevel, BloscCompressor, BloscShuffleMode, Bz2Codec,
-            Bz2CompressionLevel, GzipCodec, ZstdCodec,
+            Bz2CompressionLevel, GzipCodec, ZstdCodec, api::CodecTraits,
         },
         data_type,
     },
@@ -16,7 +17,6 @@ use zarrs::{
     metadata::v3::{MetadataV3, NodeMetadataV3},
     plugin::{ExtensionAliasesV3, ExtensionName, ZarrVersion},
 };
-use zarrs_codec::CodecTraits;
 
 use crate::codec::N5Codec;
 
@@ -197,8 +197,8 @@ impl N5Compression {
     /// Convert to a bytes-to-bytes codec if possible.
     pub fn to_bytes_to_bytes_codec(
         &self,
-    ) -> crate::Result<Option<Arc<dyn zarrs_codec::BytesToBytesCodecTraits>>> {
-        let b2b: Arc<dyn zarrs_codec::BytesToBytesCodecTraits> = match self {
+    ) -> crate::Result<Option<Arc<dyn BytesToBytesCodecTraits>>> {
+        let b2b: Arc<dyn BytesToBytesCodecTraits> = match self {
             N5Compression::Raw => return Ok(None),
             N5Compression::Bzip2 { block_size } => Arc::new(Bz2Codec::new(
                 Bz2CompressionLevel::new(*block_size as u32)
@@ -337,7 +337,7 @@ impl TryFrom<N5ArrayMetadata> for ArrayMetadataV3 {
             .name(zarr_version)
             .unwrap_or_else(|| "zarrs.n5".into());
         let codec_meta = if let Some(config) =
-            n5_codec.configuration(zarr_version, &zarrs_codec::CodecMetadataOptions::default())
+            n5_codec.configuration(zarr_version, &CodecMetadataOptions::default())
         {
             MetadataV3::new_with_configuration(name, config)
         } else {

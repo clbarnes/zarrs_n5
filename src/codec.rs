@@ -4,16 +4,17 @@ use std::ops::{Deref, Range};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+use zarrs::array::codec::api::{
+    ArrayBytes, ArrayBytesOffsets, ArrayBytesRaw, ArrayBytesVariableLength, ArrayCodecTraits,
+    ArrayToBytesCodecTraits, BytesRepresentation, BytesToBytesCodecTraits, Codec, CodecError,
+    CodecMetadataOptions, CodecOptions, CodecPluginV3, CodecTraits, CodecTraitsV3,
+    PartialDecoderCapability, PartialEncoderCapability, RecommendedConcurrency,
+};
 use zarrs::array::codec::{BytesCodec, TransposeOrder};
 use zarrs::array::{CodecChain, codec::TransposeCodec};
 use zarrs::array::{DataType, FillValue};
 use zarrs::metadata::v3::MetadataV3;
 use zarrs::plugin::PluginCreateError;
-use zarrs_codec::{
-    ArrayBytes, ArrayBytesOffsets, ArrayBytesVariableLength, ArrayCodecTraits,
-    ArrayToBytesCodecTraits, BytesToBytesCodecTraits, Codec, CodecError, CodecPluginV3,
-    CodecTraits, CodecTraitsV3,
-};
 
 use crate::chunk::{N5BlockHeader, N5BlockMode};
 
@@ -68,7 +69,7 @@ pub struct N5CodecConfiguration {
 }
 
 impl CodecTraitsV3 for N5Codec {
-    fn create(metadata: &MetadataV3) -> Result<zarrs_codec::Codec, zarrs::plugin::PluginCreateError>
+    fn create(metadata: &MetadataV3) -> Result<Codec, zarrs::plugin::PluginCreateError>
     where
         Self: Sized,
     {
@@ -86,7 +87,7 @@ impl CodecTraits for N5Codec {
     fn configuration(
         &self,
         _version: zarrs::plugin::ZarrVersion,
-        options: &zarrs_codec::CodecMetadataOptions,
+        options: &CodecMetadataOptions,
     ) -> Option<zarrs::metadata::Configuration> {
         let metadatas = self.codecs.create_metadatas(options);
         let config = N5CodecConfiguration { codecs: metadatas };
@@ -97,15 +98,15 @@ impl CodecTraits for N5Codec {
         Some(map.into())
     }
 
-    fn partial_decoder_capability(&self) -> zarrs_codec::PartialDecoderCapability {
-        zarrs_codec::PartialDecoderCapability {
+    fn partial_decoder_capability(&self) -> PartialDecoderCapability {
+        PartialDecoderCapability {
             partial_read: false,
             partial_decode: false,
         }
     }
 
-    fn partial_encoder_capability(&self) -> zarrs_codec::PartialEncoderCapability {
-        zarrs_codec::PartialEncoderCapability {
+    fn partial_encoder_capability(&self) -> PartialEncoderCapability {
+        PartialEncoderCapability {
             partial_encode: false,
         }
     }
@@ -116,7 +117,7 @@ impl ArrayCodecTraits for N5Codec {
         &self,
         shape: &[std::num::NonZeroU64],
         data_type: &zarrs::array::DataType,
-    ) -> Result<zarrs_codec::RecommendedConcurrency, zarrs_codec::CodecError> {
+    ) -> Result<RecommendedConcurrency, CodecError> {
         self.codecs.recommended_concurrency(shape, data_type)
     }
 }
@@ -131,37 +132,35 @@ impl ArrayToBytesCodecTraits for N5Codec {
         shape: &[std::num::NonZeroU64],
         data_type: &zarrs::array::DataType,
         fill_value: &zarrs::array::FillValue,
-    ) -> Result<zarrs_codec::BytesRepresentation, zarrs_codec::CodecError> {
+    ) -> Result<BytesRepresentation, CodecError> {
         self.codecs
             .encoded_representation(shape, data_type, fill_value)
     }
 
     fn encode<'a>(
         &self,
-        _bytes: zarrs_codec::ArrayBytes<'a>,
+        _bytes: ArrayBytes<'a>,
         _shape: &[std::num::NonZeroU64],
         _data_type: &zarrs::array::DataType,
         _fill_value: &zarrs::array::FillValue,
-        _options: &zarrs_codec::CodecOptions,
-    ) -> Result<zarrs_codec::ArrayBytesRaw<'a>, zarrs_codec::CodecError> {
-        Err(zarrs_codec::CodecError::Other(
-            "encoding not supported".into(),
-        ))
+        _options: &CodecOptions,
+    ) -> Result<ArrayBytesRaw<'a>, CodecError> {
+        Err(CodecError::Other("encoding not supported".into()))
     }
 
     fn decode<'a>(
         &self,
-        bytes: zarrs_codec::ArrayBytesRaw<'a>,
+        bytes: ArrayBytesRaw<'a>,
         shape: &[std::num::NonZeroU64],
         data_type: &zarrs::array::DataType,
         fill_value: &zarrs::array::FillValue,
-        options: &zarrs_codec::CodecOptions,
-    ) -> Result<zarrs_codec::ArrayBytes<'a>, zarrs_codec::CodecError> {
+        options: &CodecOptions,
+    ) -> Result<ArrayBytes<'a>, CodecError> {
         let header = N5BlockHeader::from_bytes(&bytes)
             .map_err(|e| CodecError::Other(format!("N5 block header could not be parsed: {e}")))?;
 
         if !matches!(header.mode, N5BlockMode::Default) {
-            return Err(zarrs_codec::CodecError::Other(format!(
+            return Err(CodecError::Other(format!(
                 "unsupported N5 block mode: {:?}",
                 header.mode
             )));
@@ -213,7 +212,7 @@ impl<'a> ShapeRectifier<'a> {
         }
     }
 
-    fn rectify(self) -> Result<ArrayBytes<'static>, zarrs_codec::CodecError> {
+    fn rectify(self) -> Result<ArrayBytes<'static>, CodecError> {
         if self.shape == self.desired_shape {
             return Ok(self.array_bytes.into_owned());
         }
@@ -242,7 +241,7 @@ impl<'a> ShapeRectifier<'a> {
         &self,
         bytes: &[u8],
         type_width: usize,
-    ) -> Result<ArrayBytes<'static>, zarrs_codec::CodecError> {
+    ) -> Result<ArrayBytes<'static>, CodecError> {
         let desired_numel: usize = self
             .desired_shape
             .iter()
@@ -268,7 +267,7 @@ impl<'a> ShapeRectifier<'a> {
         &self,
         bytes: &[u8],
         offsets: &[usize],
-    ) -> Result<ArrayBytes<'static>, zarrs_codec::CodecError> {
+    ) -> Result<ArrayBytes<'static>, CodecError> {
         let desired_numel: usize = self
             .desired_shape
             .iter()

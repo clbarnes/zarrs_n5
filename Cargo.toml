@@ -25,7 +25,6 @@ zarrs = { version = "0.23.5", default-features = false, features = [
     "blosc",
     "zstd",
 ] }
-zarrs_codec = "0.2.0"
 
 [features]
 async = ["zarrs/async", "dep:async-trait"]
