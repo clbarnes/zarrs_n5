@@ -30,3 +30,4 @@
 - [aschampion/rust-n5](https://github.com/aschampion/rust-n5): rust implementation of N5
 - [zarr-developers/zarr-python](https://github.com/zarr-developers/zarr-python/blob/v2.18.7/zarr/n5.py): Zarr v2's N5 support
 - [zarr-developers/n5py](https://github.com/zarr-developers/n5py): python plugins for reading N5 through Zarr v3
+- [saalfeldlab/n5-zarr](https://github.com/saalfeldlab/n5-zarr): Java implementation reading zarr data through the N5 interface

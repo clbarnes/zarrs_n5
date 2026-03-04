@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::num::NonZeroU64;
-use std::ops::Deref;
+use std::ops::{Deref, Range};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -15,13 +15,11 @@ use zarrs_codec::{
     CodecTraits, CodecTraitsV3,
 };
 
-use crate::chunk::{N5ChunkHeader, N5ChunkMode};
+use crate::chunk::{N5BlockHeader, N5BlockMode};
 
 // TODO
 // ?lz4
 // ?xz
-// ?blosc
-// ?zstd
 
 zarrs::plugin::impl_extension_aliases!(N5Codec, v3: "zarrs.n5", ["zarrs.n5", "n5"]);
 inventory::submit! {
@@ -159,10 +157,10 @@ impl ArrayToBytesCodecTraits for N5Codec {
         fill_value: &zarrs::array::FillValue,
         options: &zarrs_codec::CodecOptions,
     ) -> Result<zarrs_codec::ArrayBytes<'a>, zarrs_codec::CodecError> {
-        let header = N5ChunkHeader::from_bytes(&bytes)
+        let header = N5BlockHeader::from_bytes(&bytes)
             .map_err(|e| CodecError::Other(format!("N5 block header could not be parsed: {e}")))?;
 
-        if !matches!(header.mode, N5ChunkMode::Default) {
+        if !matches!(header.mode, N5BlockMode::Default) {
             return Err(zarrs_codec::CodecError::Other(format!(
                 "unsupported N5 block mode: {:?}",
                 header.mode
@@ -367,7 +365,9 @@ impl<'a> Raveller<'a> {
 }
 
 impl<'a> Raveller<'a> {
+    /// Panics if `idx.len() != self.shape.len()`
     fn linearize(&self, idx: &[usize]) -> Option<usize> {
+        assert!(idx.len() == self.shape.len());
         let mut out = 0;
         let mut stride = 1;
         for (i, s) in idx.iter().zip(self.shape.iter()).rev() {
@@ -378,5 +378,31 @@ impl<'a> Raveller<'a> {
             stride *= s.get() as usize;
         }
         Some(out)
+    }
+
+    #[allow(unused)]
+    /// Get the linear indices of the given row.
+    /// The row is specified by all but the last dimension (i.e. C contiguous).
+    ///
+    /// Panics if `idx.len() != self.shape.len() - 1`.
+    fn linearize_row(&self, idx: &[usize]) -> Option<Range<usize>> {
+        assert!(idx.len() == self.shape.len() - 1);
+        let mut start = 0;
+        let end = self.shape.len() - 1;
+        let last_shape = self.shape[end].get() as usize;
+        let mut stride = last_shape;
+        for (i, s) in idx.iter().zip(self.shape[..end].iter()).rev() {
+            if *i as u64 >= s.get() {
+                return None;
+            }
+            start += i * stride;
+            stride *= s.get() as usize;
+        }
+        Some(start..start + last_shape)
+    }
+
+    #[allow(unused)]
+    fn row_len(&self) -> usize {
+        self.shape.last().unwrap().get() as usize
     }
 }

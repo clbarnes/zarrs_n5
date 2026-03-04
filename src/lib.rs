@@ -17,7 +17,7 @@
 //! Alternatively, N5 data can additionally contain a `zarr.json` with specific configuration to allow reading as zarr without the [storage::N5Store].
 
 mod chunk;
-pub use chunk::{N5ChunkHeader, N5ChunkMode};
+pub use chunk::{N5BlockHeader, N5BlockMode};
 
 mod codec;
 pub use codec::{N5Codec, N5CodecConfiguration};

@@ -100,7 +100,7 @@ pub struct N5ArrayMetadata {
     pub attributes: serde_json::Map<String, serde_json::Value>,
 }
 
-/// N5 chunk compression configuration.
+/// N5 block compression configuration.
 #[non_exhaustive]
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase", tag = "type")]

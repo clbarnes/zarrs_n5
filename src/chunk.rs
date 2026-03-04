@@ -1,13 +1,15 @@
+/// Representation of the N5 block header.
 #[derive(Debug, Clone)]
-pub struct N5ChunkHeader {
-    pub(crate) mode: N5ChunkMode,
+pub struct N5BlockHeader {
+    pub(crate) mode: N5BlockMode,
     /// Column-major, probably?
     pub(crate) shape: Vec<u32>,
 }
 
+/// Mode of the N5 block.
 #[derive(Debug, Clone, Copy)]
 #[repr(u16)]
-pub enum N5ChunkMode {
+pub enum N5BlockMode {
     Default = 0,
     #[allow(unused)]
     VarLen {
@@ -16,7 +18,7 @@ pub enum N5ChunkMode {
     Object = 2,
 }
 
-impl N5ChunkHeader {
+impl N5BlockHeader {
     pub fn from_bytes(bytes: &[u8]) -> crate::Result<Self> {
         let mut offset: usize = 0;
 
@@ -43,19 +45,19 @@ impl N5ChunkHeader {
         }
 
         let mode = match mode_num {
-            0 => N5ChunkMode::Default,
+            0 => N5BlockMode::Default,
             1 => {
                 let num_el = u32::from_be_bytes(
                     bytes[offset..offset + 4]
                         .try_into()
                         .map_err(crate::Error::wrap)?,
                 );
-                N5ChunkMode::VarLen { num_el }
+                N5BlockMode::VarLen { num_el }
             }
-            2 => N5ChunkMode::Object,
+            2 => N5BlockMode::Object,
             n => return Err(crate::Error::general(format!("invalid N5 chunk mode {n}"))),
         };
-        Ok(N5ChunkHeader { mode, shape })
+        Ok(N5BlockHeader { mode, shape })
     }
 
     pub(crate) fn data_offset(&self) -> usize {
@@ -63,7 +65,7 @@ impl N5ChunkHeader {
             + size_of::<u16>() // ndim
             + self.shape.len() * size_of::<u32>()  // shape
             + match self.mode {
-                N5ChunkMode::VarLen { .. } => size_of::<u32>(),
+                N5BlockMode::VarLen { .. } => size_of::<u32>(),
                 _ => 0,
             }
     }
