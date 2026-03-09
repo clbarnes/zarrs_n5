@@ -159,12 +159,25 @@ impl ArrayToBytesCodecTraits for N5Codec {
         let header = N5BlockHeader::from_bytes(&bytes)
             .map_err(|e| CodecError::Other(format!("N5 block header could not be parsed: {e}")))?;
 
-        if !matches!(header.mode, N5BlockMode::Default) {
-            return Err(CodecError::Other(format!(
-                "unsupported N5 block mode: {:?}",
-                header.mode
-            )));
-        }
+        match header.mode {
+            N5BlockMode::Default => {
+                if !data_type.is_fixed() {
+                    return Err(CodecError::Other(
+                        "N5 block mode is 'default' but data_type is not fixed".to_string(),
+                    ));
+                }
+            }
+            N5BlockMode::VarLen { .. } => {
+                return Err(CodecError::Other(
+                    "N5 block mode 'varlen' is not supported".to_string(),
+                ));
+            }
+            N5BlockMode::Object => {
+                return Err(CodecError::Other(
+                    "N5 block mode 'object' is not supported".to_string(),
+                ));
+            }
+        };
 
         let header_shape: Vec<_> = header
             .shape
@@ -227,6 +240,7 @@ impl<'a> ShapeRectifier<'a> {
                 self.handle_fixed(cow, width)
             }
             ArrayBytes::Variable(abvl) => {
+                // This is unreachable for now but is along the right lines if implemented in future.
                 let offsets = abvl.offsets().deref();
                 let bytes = abvl.bytes().deref();
                 self.handle_variable(bytes, offsets)
@@ -263,6 +277,7 @@ impl<'a> ShapeRectifier<'a> {
         Ok(ArrayBytes::Fixed(Cow::Owned(out)))
     }
 
+    /// This is unreachable for now but is along the right lines if implemented in future.
     fn handle_variable(
         &self,
         bytes: &[u8],
