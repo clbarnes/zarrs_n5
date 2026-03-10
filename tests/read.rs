@@ -6,6 +6,7 @@ use zarrs::metadata::v3::NodeMetadataV3;
 use zarrs::storage::WritableStorageTraits;
 use zarrs::storage::store::MemoryStore;
 use zarrs::storage::{ReadableListableStorage, ReadableStorageTraits, StoreKey};
+use zarrs_n5::ImplicitGroupStoreAdapter;
 
 fn data_dir() -> PathBuf {
     env_logger::try_init().ok();
@@ -64,7 +65,7 @@ fn inner_store() -> FilesystemStore {
 }
 
 fn n5_store() -> ReadableListableStorage {
-    Arc::new(zarrs_n5::N5Store::new(inner_store()))
+    Arc::new(zarrs_n5::N5StoreAdapter::new(inner_store()))
 }
 
 fn read_n5(name: &str) -> (Vec<u64>, Vec<f32>) {
@@ -131,8 +132,14 @@ fn test_uneven_truncated() {
 #[test]
 fn test_convert_node() {
     let store = Arc::new(inner_memory_store("single_chunk"));
-    zarrs_n5::convert_n5_node(store.clone(), &"/".try_into().unwrap(), false)
-        .expect("should be able to convert node");
+    zarrs_n5::convert_n5(
+        store.clone(),
+        &"/".try_into().unwrap(),
+        false,
+        Some(zarrs_n5::N5ArrayMode::Default),
+        false,
+    )
+    .expect("should be able to convert node");
 
     let n5_attrs_bytes = store
         .get(&"attributes.json".try_into().unwrap())
@@ -141,7 +148,7 @@ fn test_convert_node() {
     let n5_metadata: zarrs_n5::N5Metadata =
         serde_json::from_slice(&n5_attrs_bytes).expect("should be able to parse attributes.json");
     let expected_zarr_metadata: NodeMetadataV3 = n5_metadata
-        .try_into()
+        .try_into_zarr(zarrs_n5::N5ArrayMode::Default)
         .expect("should be able to convert N5 metadata to Zarr metadata");
 
     let zarr_metadata_bytes = store
@@ -151,4 +158,42 @@ fn test_convert_node() {
     let zarr_metadata: NodeMetadataV3 =
         serde_json::from_slice(&zarr_metadata_bytes).expect("should be able to parse zarr.json");
     assert_eq!(zarr_metadata, expected_zarr_metadata);
+}
+
+#[test]
+fn test_implicit_group() {
+    let inner = MemoryStore::default();
+    let key = StoreKey::new("zarr.json").unwrap();
+    assert!(inner.get(&key).unwrap().is_none());
+
+    let outer = ImplicitGroupStoreAdapter::new(inner);
+    assert!(outer.get(&key).unwrap().is_some());
+
+    let inner2 = outer.into_inner();
+    assert!(inner2.get(&key).unwrap().is_none());
+}
+
+#[test]
+fn test_implicit_group_attrs() {
+    let attrs = serde_json::json!({
+        "foo": "bar",
+    })
+    .as_object()
+    .unwrap()
+    .clone();
+
+    let inner = ImplicitGroupStoreAdapter::new_with_attributes(MemoryStore::default(), attrs);
+
+    for key_str in ["zarr.json", "a/b/c/zarr.json"] {
+        let key = StoreKey::new(key_str).unwrap();
+        let bytes = inner.get(&key).unwrap().unwrap();
+        let metadata: NodeMetadataV3 =
+            serde_json::from_slice(&bytes).expect("should be able to parse zarr.json");
+        let NodeMetadataV3::Group(g) = metadata else {
+            panic!("metadata should be a group");
+        };
+        let val = g.attributes.get("foo").unwrap();
+        let s = val.as_str().unwrap();
+        assert_eq!(s, "bar");
+    }
 }

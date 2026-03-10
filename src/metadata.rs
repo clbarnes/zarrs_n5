@@ -18,7 +18,7 @@ use zarrs::{
     plugin::{ExtensionAliasesV3, ExtensionName, ZarrVersion},
 };
 
-use crate::codec::N5Codec;
+use crate::{codec::N5DefaultCodec, storage::N5ArrayMode};
 
 /// Representation of N5 metadata, either an array or a group.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,6 +61,13 @@ impl N5Metadata {
             N5Metadata::Group(m) => m.attributes,
         }
     }
+
+    pub fn try_into_zarr(self, array_mode: N5ArrayMode) -> crate::Result<NodeMetadataV3> {
+        match self {
+            N5Metadata::Array(m) => m.try_into_zarr(array_mode).map(NodeMetadataV3::Array),
+            N5Metadata::Group(m) => Ok(NodeMetadataV3::Group(m.into())),
+        }
+    }
 }
 
 /// Representation of N5 group metadata.
@@ -98,6 +105,51 @@ pub struct N5ArrayMetadata {
     /// Unstructured attributes.
     #[serde(flatten)]
     pub attributes: serde_json::Map<String, serde_json::Value>,
+}
+
+impl N5ArrayMetadata {
+    /// Try to convert the N5 metadata to Zarr metadata using the given array mode.
+    ///
+    /// Only the 'default' array mode is currently supported.
+    pub fn try_into_zarr(self, array_mode: N5ArrayMode) -> crate::Result<ArrayMetadataV3> {
+        let ser_val = serde_json::to_value(self.clone())?;
+        let mut attrs = self.attributes;
+        attrs.insert("_n5".into(), ser_val);
+
+        let shape: Vec<_> = self.dimensions;
+
+        let zarr_version = ZarrVersion::V3;
+        let codec_meta = match array_mode {
+            N5ArrayMode::Default => {
+                let n5_codec =
+                    N5DefaultCodec::new(self.compression.to_bytes_to_bytes_codec()?, shape.len());
+                let name = n5_codec
+                    .name(zarr_version)
+                    .unwrap_or_else(|| "zarrs.n5_default".into());
+                if let Some(config) =
+                    n5_codec.configuration(zarr_version, &CodecMetadataOptions::default())
+                {
+                    MetadataV3::new_with_configuration(name, config)
+                } else {
+                    MetadataV3::new(name)
+                }
+            }
+            _ => {
+                return Err(crate::Error::general(format!(
+                    "N5 array mode {array_mode:?} is not compatible with configured array mode {array_mode:?}"
+                )));
+            }
+        };
+
+        let chunk_grid = convert_chunk_grid(&self.block_size)?;
+        let data_type = convert_data_type(&self.data_type)?;
+        let fill_value = convert_fill_value();
+
+        let out = ArrayMetadataV3::new(shape, chunk_grid, data_type, fill_value, vec![codec_meta])
+            .with_chunk_key_encoding(convert_chunk_key_encoding())
+            .with_attributes(attrs);
+        Ok(out)
+    }
 }
 
 /// N5 block compression configuration.
@@ -322,48 +374,5 @@ impl From<N5GroupMetadata> for GroupMetadataV3 {
         let mut attrs = value.attributes;
         attrs.insert("_n5".into(), ser_val);
         Self::default().with_attributes(attrs)
-    }
-}
-
-impl TryFrom<N5ArrayMetadata> for ArrayMetadataV3 {
-    type Error = crate::Error;
-
-    fn try_from(value: N5ArrayMetadata) -> Result<Self, Self::Error> {
-        let ser_val = serde_json::to_value(value.clone())?;
-        let mut attrs = value.attributes;
-        attrs.insert("_n5".into(), ser_val);
-
-        let shape: Vec<_> = value.dimensions;
-        let chunk_grid = convert_chunk_grid(&value.block_size)?;
-        let data_type = convert_data_type(&value.data_type)?;
-        let fill_value = convert_fill_value();
-
-        let zarr_version = ZarrVersion::V3;
-        let n5_codec = N5Codec::new(value.compression.to_bytes_to_bytes_codec()?, shape.len());
-        let name = n5_codec
-            .name(zarr_version)
-            .unwrap_or_else(|| "zarrs.n5".into());
-        let codec_meta = if let Some(config) =
-            n5_codec.configuration(zarr_version, &CodecMetadataOptions::default())
-        {
-            MetadataV3::new_with_configuration(name, config)
-        } else {
-            MetadataV3::new(name)
-        };
-        let out = Self::new(shape, chunk_grid, data_type, fill_value, vec![codec_meta])
-            .with_chunk_key_encoding(convert_chunk_key_encoding())
-            .with_attributes(attrs);
-        Ok(out)
-    }
-}
-
-impl TryFrom<N5Metadata> for NodeMetadataV3 {
-    type Error = crate::Error;
-
-    fn try_from(value: N5Metadata) -> Result<Self, Self::Error> {
-        match value {
-            N5Metadata::Array(m) => m.try_into().map(Self::Array),
-            N5Metadata::Group(m) => Ok(Self::Group(m.into())),
-        }
     }
 }

@@ -12,7 +12,7 @@ pub struct N5BlockHeader {
 pub enum N5BlockMode {
     Default = 0,
     #[allow(unused)]
-    VarLen {
+    VarLength {
         num_el: u32,
     } = 1,
     Object = 2,
@@ -52,7 +52,7 @@ impl N5BlockHeader {
                         .try_into()
                         .map_err(crate::Error::wrap)?,
                 );
-                N5BlockMode::VarLen { num_el }
+                N5BlockMode::VarLength { num_el }
             }
             2 => N5BlockMode::Object,
             n => return Err(crate::Error::general(format!("invalid N5 chunk mode {n}"))),
@@ -65,7 +65,7 @@ impl N5BlockHeader {
             + size_of::<u16>() // ndim
             + self.shape.len() * size_of::<u32>()  // shape
             + match self.mode {
-                N5BlockMode::VarLen { .. } => size_of::<u32>(),
+                N5BlockMode::VarLength { .. } => size_of::<u32>(),
                 _ => 0,
             }
     }
