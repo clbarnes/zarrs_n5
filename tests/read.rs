@@ -124,6 +124,11 @@ fn test_uneven_padded() {
 }
 
 #[test]
+fn test_uneven_truncated() {
+    check_read("uneven_chunk_truncated");
+}
+
+#[test]
 fn test_convert_node() {
     let store = Arc::new(inner_memory_store("single_chunk"));
     zarrs_n5::convert_n5_node(store.clone(), &"/".try_into().unwrap(), false)

@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+n5-copy -i uneven_chunk_padded.n5 -o uneven_chunk_truncated.n5 -c raw -b 192,96
